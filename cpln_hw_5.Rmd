@@ -1,0 +1,209 @@
+---
+title: "Cpln HW 4"
+author:
+- Ajjit Narayanan
+- Bill Cohen
+date: "`r format(Sys.time(), '%d. %B %Y')`"
+output:
+  word_document:
+    reference_docx: word-test-options.docx
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(NbClust)
+library(flexclust)
+library(knitr)
+library(tidyverse)
+
+options(scipen=999)
+philadata <- read.csv("RegressionData.csv")
+```
+
+## Introduction
+
+
+With both spatial and non-spatial data, it is useful to group subsets of a population by shared characteristics. When those shared characteristics are known and defined, many useful statistical regression modeling techniques can be used to analyze the data. Spatial proximity can be one such grouping, but data can also be better understood by grouping non-spatial variables such as home value, income, education, and property type. However class membership is often unknown in advance. 
+
+Cluster analysis  can be used to identify groups of data with similar traits within a sample population when those class distinctions do not exist a priori. For this analysis, we have a dataset of all the block groups in Philadelphia. For each block group, we have the following variables:  median house value (MEDHVAL), median household income (MEDHHINC), percent of individuals with at least a bachelor’s degree (PCTBACHMOR), percent of single/detached housing units (PCTSINGLES), percent of vacant housing units (PCTVACANT). The goal of this paper is to find clusters of block groups with similar characteristics. The method that we will be using is k-means clustering, which takes a user specified number of clusters and groups each observation into a cluster. It can help us understand the various kinds of block groups that exist in Philadelphia, see how the different variables are distributed across all block groups, and look at relationships between variables within the cluster. 
+
+## Methods
+
+As stated above, we will use the k-means clustering algorithm to find out if there are discrete clusters of block groups in Philly. The k-means algorithm groups interval (numerical) data into a user-specified number of clusters, such that each observation belongs to exactly one cluster. To do this, the K-means algorithm uses a 6 step iterative process. 
+
+1) Randomly selects k points as cluster centers within the n dimensional space of our data, where n is the number of variables we are clustering the data on.
+2) Calculate the (Euclidean) distance between each data point and each of the randomly assigned cluster centers
+3) Assign each data point to the cluster center that it is closest to
+4) Using the newly calculated clusters of data points, recalculate the cluster centers 
+5) Update the distance between each data point and the newly calculated cluster center
+6) If no observation changes membership, the process concludes. If not, repeat from step 3
+
+The underlying objective is to locate the cluster centroids such that they minimize the overall distance to cluster member observations. This is calculated as the sum of squared errors (SSE), or the sum of squared distances between each observation in a cluster and the cluster centroid:
+$SSE = \sqrt{(x_i - x_c)^2 + (y_i - y_c)^2}$
+
+where $x_i$ and $y_i$ are the coordinates of observation $i$, and $x_c$ and $y_c$ are the coordinates of the nearest centroid.
+
+As with other cluster analysis methods, K-means clustering seeks to separate objects such that the resulting groups are easily interpreted and meaningfully actionable.  The biggest factor in the success of the k-means clustering method is the number of clusters chosen. When classes are unknown, it is often difficult to know how many clusters to use. Because this is user-defined, there is great room for influencing the results and this is in fact one of the limitations of the k-means algorithm. There are a number of tests and indices that calculate an optimal number of clusters for K-means, such as the Hubert index and the D index. Some other limitations with k-means clustering include issues dealing with noise and outliers, groups of different sizes and densities, and those with non-globular shapes. 
+
+Hierarchical clustering can offer an alternative for smaller datasets, working from the bottom up to group data into cluster hierarchies. Density-based clustering (DBSCAN) groups points by establishing a meaningful neighborhood size and minimum number of neighbors. 
+
+## Results
+
+Below is the the results from the Scree plot, which is a graph of the number of clusters vs the within group sum of squares. An appropriate cluster solution could be defined as the solution at which the reduction in SSE slows dramatically. This produces an "elbow" in the Scree plot.
+
+
+
+```{r Nbclust_results}
+#We remove the firrst 1 column (Poly_ID) which shouldn't be subjected to the K-means
+#The scale command standardizes the variables so that the means are 0 and s.d. = 1.
+df <- data.frame(scale(philadata[-1]))
+
+#Determine number of clusters by looking at the scree plot.
+ 
+wss <- (nrow(df)-1)*sum(apply(df,2,var))
+for (i in 2:20) wss[i] <- sum(kmeans(df, 
+                                     centers=i)$withinss)
+#plot(1:20, wss, type="b", xlab="Number of Clusters",
+#     ylab="Within groups sum of squares")
+
+wss1 = data.frame(w_sum_sq = wss, num_clusters = 1:length(wss))
+
+ggplot(data = wss1, aes(x = num_clusters, y = w_sum_sq))+
+  geom_line(col = "steelblue")+
+  geom_point(col = "steelblue")+
+  xlab("Number of Clusters")+
+  ylab("Within Group Sum of Squares")+
+  ggtitle("Scree Plot")
+
+```
+
+The figure is fairly inconclusive, without a distinctive elbow. It appears however that the greatest decline in slope between clusters 3 and 5, suggesting 4 clusters should be used. Next we use the NbClust package in R, which has 30 different methods to determine the optimal number of clusters. Below is a barplot of the number of clusters and the number of criteria that choose the cluster size as optimal. 
+
+```{r, fig.height=4, fig.width=5}
+
+#The NbClust package has 30 different methods to determine the optimal number 
+#of clusters. We can select the index="alllong" option and get the results from
+#all 30 indices. (Many use the option index="all" and get results from 26 most
+#relevant indices). We then use the number of clusters that's chosen by the 
+#largest number of indices. See pp. 4-6 of this document: 
+#https://cran.r-project.org/web/packages/NbClust/NbClust.pdf.
+#Note that not all 30 criteria can be calculated for every dataset.
+set.seed(1234)
+nc <- NbClust(df, min.nc=2, max.nc=15, method="kmeans", index="all")
+#table(nc$Best.n[1,])
+
+#nbclust = as.data.frame(table(nc$Best.n[1,]))
+
+barplot(table(nc$Best.n[1,]),
+        xlab="Numer of Clusters", ylab="Number of Criteria",
+         col = "steelblue")
+
+
+```
+
+We can see from the output of the NbClust plot that approximately 6 of the methods choose an optimal cluster size of 2. This is the cluster size with the highest number of criteria, but clusters of size 3 and size 13 are also noticeably large. For now, we proceed with using a cluster size of 2, as that had the most number of criteria to back it up. Below are the results of running a 2-mean clustering algorithm on our data. We present the sizes of the clusters along with the standardized and unstandardized (ie actual) means of each cluster
+
+```{r}
+#http://tagteam.harvard.edu/hub_feeds/1981/feed_items/240096:
+#Since K-means cluster analysis starts with k randomly chosen centroids, 
+#a different solution can be obtained each time the function is invoked. 
+#Use the set.seed() function to guarantee that the results are 
+#reproducible. Additionally, this clustering approach can be sensitive 
+#to the initial selection of centroids. The kmeans() function has an 
+#nstart option that attempts multiple initial configurations and reports 
+#on the best one. For example, adding nstart=25 will generate 25 initial
+#configurations. This approach is often recommended.
+set.seed(1234)
+fit.km <- kmeans(df, 2, nstart=25)
+#Let's look at the number of observations in each cluster
+
+kable(data.frame(cluster = 1:2, size = fit.km$size))
+
+#Results: 1446 in cluster 1, 274 in cluster 2
+
+#fit.km$cluster provides the clustering results and fit.km$centers provides 
+#the centroid vector (i.e., the mean) for each cluster.
+```
+
+Standardized Cluster Means
+
+```{r}
+kable(as.data.frame(cbind(cluster = c("1","2"),round(fit.km$centers, 2))))
+#fit.km$cluster
+#write.csv(fit.km$cluster, file = "philadata2.csv")
+
+
+```
+
+Actual Cluster Means
+
+```{r}
+#Calculate the average value of each of the original variables in the
+#dataset within each cluster. Again, we're excluding the 1st variable (POLY_ID) 
+#using the wine[-1] command.
+kable(round(aggregate(philadata[-1], by=list(cluster=fit.km$cluster), mean),1))
+
+
+#We can quantify the agreement between type and cluster, using an adjusted Rand
+#index provided by the flexclust package. The adjusted Rand index provides a 
+#measure of the agreement between two partitions, adjusted for chance. It ranges 
+#from -1 (no agreement) to 1 (perfect agreement). Agreement between the wine 
+#varietal type and the cluster solution is 0.9. Not bad at all.
+
+#round(randIndex(fit.km),1)
+
+```
+
+So it seems as if the model grouped the majority of the data points into cluster 1, and a small amount into cluster 2. Broadly, we can define cluster 1 as "working class" and cluster 2 as "hardly working class". The working class cluster, which is most of the block groups in Philly, have lower Median Household values of around \$50,000, have only 10% of the population with a bachelors degree or higher, have household incomes of around \$27,668, have 12% of lots that are vacant, and only have 6.8% of houses with singles. In contrast, the hardly working cluster has Median Household values of around \$152,000, have 47% of the population with a bachelors degree or higher, have household incomes of around \$51,928, have around 4.8% of lots that are vacant, and have 22.3% of houses with singles. Although basic, these clusters do make sense in the context of Philadelphia, which is one of the poorest large cities in the United States. For completeness sake, we also run k-means again with cluster sizes of 3 and 13, they were the runner up cluster sizes based on the criteria. We present the cluster sizes and actual cluster means for 3 and 13 clusters respectively. 
+
+```{r}
+#configurations. This approach is often recommended.
+set.seed(1234)
+fit.km1 <- kmeans(df, 3, nstart=25)
+#Let's look at the number of observations in each cluster
+kable(data.frame(cluster = 1:3, size = fit.km1$size))
+
+
+
+
+set.seed(1234)
+fit.km2 <- kmeans(df, 13, nstart=25)
+#Let's look at the number of observations in each cluster
+
+kable(data.frame(cluster = 1:13, size = fit.km2$size))
+
+```
+
+Actual Cluster Means
+
+```{r}
+#Calculate the average value of each of the original variables in the
+#dataset within each cluster. Again, we're excluding the 1st variable (POLY_ID) 
+#using the wine[-1] command.
+kable(round(aggregate(philadata[-1], by=list(cluster=fit.km1$cluster), mean),1))
+
+
+kable(round(aggregate(philadata[-1], by=list(cluster=fit.km2$cluster), mean),1))
+
+#We can quantify the agreement between type and cluster, using an adjusted Rand
+#index provided by the flexclust package. The adjusted Rand index provides a 
+#measure of the agreement between two partitions, adjusted for chance. It ranges 
+#from -1 (no agreement) to 1 (perfect agreement). Agreement between the wine 
+#varietal type and the cluster solution is 0.9. Not bad at all.
+
+#round(randIndex(fit.km),1)
+
+```
+
+The 3 cluster analysis is very similar to the 2 cluster analysis, but now there is a low income group, a middle income group, and a high income group. The low income and high income groups are more extreme than the groups we had under 2 clusters. The 13 cluster output is a little harder to read, but it basically just shows even more gradation. i
+
+Now we want to analyze the spatial distribution of clusters for our original 2 cluster analysis. To do this, we imported the data into ArcMap and then generate choropleth maps. The pink zones represent block groups in cluster 1 and the blue zones represents block groups in cluster 2. 
+
+![](HW 5.png)
+
+There is clear spatial autocorrelation within clusters, with cluster 2 primarily located in the northeast and northwest, with an additional pocket in Center City/University City. Based on Philadelphia census data used in previous assignments, we know that these areas tend to have high median household income, high median home value, and higher levels of college educated residents. Another accurate name for these clusters could be “The 1%” (cluster 2) and the “99%” (cluster 1).
+
+##Discussion
+
+In conclusion, we tried to find clusters of Philadelphia block groups based on several socioeconomic characteristics. Using a k-means algorithm, we first identified 2 as the optimal number of clusters to split our data into. We then saw that the 2 clusters in our data roughly corresponded to  “The 1%” (cluster 2) and "The 99%” (cluster 1). The 1% tended to have higher Median Household Values, higher Median Household Incomes, lower vacancy rates, higher education rates, and a higher amount of singles. This is mostly in line with our intuition as it makes sense that the richer parts of the city also have higher levels of education, lower rates of vacancy and higher amount of single households. 
+
