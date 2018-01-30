@@ -1,0 +1,487 @@
+---
+title: "HW3"
+author:
+- Ajjit Narayanan
+- Bill Cohen
+date: "`r format(Sys.time(), '%d. %B %Y')`"
+output:
+  word_document:
+    reference_docx: word-test-options.docx
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+options(scipen = 999)
+
+library(aod)
+library(ggplot2)
+library(rms)
+library(gmodels)
+library(nnet)
+library(DAAG)
+library(ROCR)
+library(psych)
+library(data.table)
+library(knitr)
+library(tidyr)
+library(broom)
+library(MASS)
+library(knitr)
+library(pander)
+library(ggthemes)
+library(extrafont)
+font_import(prompt = FALSE, pattern = "cmu")
+loadfonts(device = "win", quiet = T)
+
+setwd("C:/Users/Ajjit/Google Drive/Documents/CPLN/Cpln HW 3")
+mydata <- read.csv("Logistic Regression Data.csv")
+```
+
+#Introduction
+
+Across the United States, drivers under the influence of alcohol are responsible for an estimated 30 deaths per day according the U.S. Department of Transportation. In addition to the staggering loss of life, drunk driving causes many more non-fatal injuries and significant economic losses, making it a major risk factor when operating a motor vehicle. In this study, we examine motor vehicle accidents in the City of Philadelphia to identify indicators associated with drunk driving in residential neighborhoods. 
+
+Out of the 53,260 car crashes that took place in Philadelphia between 2008-2012, we focus on 43,364 accidents that took place in residential block groups where median household income and vacancy rates are higher than 0. The data set was compiled using data from the Pennsylvania Department of Transportation and the U.S. Census Bureau, and includes the following variables: FATAL_OR_M which indicates whether the crash was fatal or caused a serious injury, OVERTURNED, which indicates if a vehicle was overturned in the crash, CELL_PHONE, which indicates if a cell phone was used, SPEEDING, which indicates if a car was speeding, AGGRESSIVE, which indicates if a driver was behaving aggressively, DRIVER1617, which indicates if a driver was 16 or 17 years of age, DRIVER65PLUS, which indicates if a driver is over the age od 65, PCTBACHMOR, which is the percentage of people with a bachelors degree or more in the blockgroup where the accident took place, and finally MEDHHINC, which is the median household income for the block group. For this analysis, we run multiple logistic regression using R and Rstudio.
+
+#Methods
+
+In this study, we use logistic regression to model the relationship between a binary dependent variable and several categorical and continuous predictor variables. The binary dependent variable, DRINKING_D, takes on values of 0 or 1 indicating whether or not one or more drivers were intoxicated in a given accident. 
+
+In a previous paper, we regressed a continuous variable on several predictors using multiple ordinary least squares (OLS) regression. While OLS is equipped to model binary predictor variables as independent variables, it is not appropriate for modeling binary dependent variables as dependent variables.
+
+OLS regression yields  parameters that define a linear relationship between the dependent variable and each of the predictor variables. In particular, each of the $\beta 's$ in OLS is interpreted as the amount by which the dependent variable changes when $x_1$ increases by one unit. However if the dependent variable is binary, that means it can only take on values of 0 or 1. So saying that a one unit increase in an independent variable leads to a $\beta$ increase in the binary variable doesn't make sense. In other words, since the binary variable only takes on one of two values, such an incremental relationship cannot exist between dependent and independent variables. 
+
+
+The probability of an event occurring is given by the number of observations where the event occurs divided by the total total number of observations. Here, the probability that an accident involves a drunk driver (DRINKING_D = 1) is equal to:
+
+\[
+P(DRINKING\_D = 1) = \frac{\text{# of accidents where }DRINKING\_D = 1}{\text{Total # of accidents}}
+\]
+
+To find the probability that an event does not occur, in this case the probability that a car accident does not involve a drunk driver, we could use the same approach. Alternatively, since there are only two possible outcomes with a binary variable, we can subtract the above probability from 1.
+
+\[
+P(DRINKING\_D = 0) = \frac{\text{# of accidents where }DRINKING\_D = 0}{\text{Total # of accidents}} = 1 - P(DRINKING\_D = 1)
+\]
+
+Odds(DRINKING\_D = 1) = \frac{\text{# of accidents where }DRINKING\_D = 1}{\text{# of accidents where }DRINKING\_D = 0}
+\]
+
+The odds can also be written as only a function of $P(DRINKING\_D = 1)$:
+
+\[
+Odds(DRINKING\_D = 1) = \frac{P(DRINKING\_D = 1)}{P(DRINKING\_D = 0)} = \frac{P(DRINKING\_D = 1)}{1 - P(DRINKING\_D = 1)} = \frac{p}{1-p}
+\]
+
+where $p$ = P(DRINKING_D = 1). The natural log of the odds function $\frac{p}{1-p}$ = $\ln(\frac{p}{1-p})$ is known as the log odds, or logit function. 
+
+
+We can write the equation for logistic regression with multiple predictors in terms of the logit function as: 
+\[
+ln(\frac{p}{1-p}) = \beta_0 + \beta_1 FATAL\_OR\_M + \beta_2 OVERTURNED + \beta_3 CELL\_PHONE + \beta_4 SPEEDING + \beta_5 AGGRESSIVE + \beta_6 DRIVER1617 + \beta_7 DRIVER65PLUS + \beta_8P CTBACHMOR + \beta_9 MEDHHINC
+\]
+
+where the model parameters are defined as:
+
+$\beta_0$ = intercept, or the value of the log odds when all predictors = 0
+
+$\beta_i = E(\hat{\beta}_i)$ = population value of the slope coefficient for predictor $i$ such that the log odds change by a value of $\beta_i$ when predictor $i$ increases by one unit, with all other predictors held constant.
+
+
+![](logit_eq1.png)
+
+![](logit_eq.png)
+
+For each predictor, we run hypothesis tests to see if the effects of that predictors are significant. The test is based on the quantity $\frac{\hat{\beta_i} - E(\hat{\beta_i})}{\sigma_{\beta_i}} = \frac{\hat{\beta_i}}{\sigma_{\beta_i}}$. This quantity is called a Wald statistic and follows a standard normal distribution. The p-values may be obtained by calculating the Wald score and then consulting a standard normal(z) table. Furthermore, most statisticians prefer not to evaluate the $\beta$ coefficients directly and instead look at the odds ratios, which are calculated by exponentiating the coefficients.
+
+
+## Assesing Model Fit
+In order to assess the quality of model fit under logistic regression, we use different methods than in OLS. An R-squared value may be calculated for logit models but but is no longer useful and doesn't have the same interpretation as in OLS. Instead we look to metrics like the Aikake Information Criterion (AIC) for model selection. The AIC is a measure of model quality relative to other models that is based on the maximum value of the likelihood function. A lower AIC means a better model fit. 
+Some other model fit metrics that are specific to logistic regression are specificity, sensitivity and misclassification rate. In order to explain these, we first have to understand how residuals and fitted values are calculated in logistic regression. Just as in OLS regression, the residuals are equal to $y_i - \hat{y_i}$. However, here the fitted value, $\hat{y_i}$, is the probability that $y=1$ and is constrained between 0 and 1. If we were to examine the distribution of the fitted values in a logistic regression, it would look something like this 
+
+![](logit_fit_hist.PNG)
+
+
+So we have to choose a cutoff point so we can  classify observations as either low probability or high probability, corresponding to values of 0 and 1 in the binary predicted variable. When we do that, we can generate a table to compare the predicted and actual values that looks something like this
+```{r, results = 'asis'}
+kable(matrix(c("","Observed 0","Observed 1","Predicted 0","a","b","Predicted 1","c","d"), ncol=3, nrow=3, byrow=T))
+```
+
+Using the above table, we can measure 3 metrics for goodness of fit: sensitivity, specificity, and the missclassification rate. Sensitivity or the true positive rate measures the percentage of actual positives which are correctly identified. In the above table, this is equivalent to $\frac{d}{b+d}$.  Specificity or the true negative rate measures the percentage of negatives which are correctly identified as such. In the above table, this is equivalent to $\frac{a}{a+c}$. The missclassification rate is the proportion of all observations that are misidentified. In the case of our table, this is $\frac{b+c}{a+b+C+d}$.
+
+One important thing to keep in mind is that the specific values of $a, b, c$ and $d$ (and thus the sensitivity, specificity, and missclassification rates) depend on the cut-off value that we choose for determining whether an observation should be considered as high probability. One should try using different cut-off values and see how the goodness of fit measures change.
+
+One tool we can use to help us choose cut-off values is the ROC curve. The ROC curve is a plot of the true positive rate (sensitivity) versus the false positive rate (1-specificity) across different cut-off values. We can use the ROC curve to help us select a good cut-off value by optimizing specificity and sensitivity. The optimal cutoff value is calculated as the point on the ROC curve where the distance from the ROC curve to the upper left of corner of the graph is minimized. Another way to compute a good cut-off value is to maximize the value of Specificity+Sensitivity, and this is called the Youden Index. However we will not be using this method in our report Below is an example of what a ROC curve would look like and how the initial minimization method would work. 
+
+![](ROC.jpg)
+
+The ROC curve can also help assess model quality. In particular, the area under the ROC curve (AUC) is a measure of prediction accuracy of the model and tells us how well a model predicts 1 response's as 1 and 0 responses as 0. Possible values for the AUC range between 0.5 and 1. A rough guide for classifying the accuracy is as follows: 
+
+    - .90-1 = excellent
+    - .80-.90 = good
+    - .70-.80 = fair
+    - .60-.70 = poor
+    - .50-.60 = fail
+
+##Assumptions of Logistic Regression 
+
+The assumption of logistic regression are markedly different than the assumptions of OLS. There is still an assumption of no severe multcollinearity. However in logistic regression, the assumption of strict linear relationships between dependent and independent variables no longer holds. The assumptions of homoscedasticity and normality of residuals is also dropped. Some additional assumptions are that the dependent variable has to be binary (ie have values of 0 or 1). There are also larger sample size requirement for logistic regression as compared to OLS regression. There must be at least 50 samples per predictor, as compared to 10 in the OLS case. And finally, the assumption of independence of observations also applies to logistic regression. 
+
+##Exploratory Analysis
+
+Prior to running logistic regression, statisticians often run some exploratory tests to provide a preliminary understanding of the relationships between the predictor and dependent variables. The tests are slightly different for categorical and continuous predictors, and they are presented in Tables 1 and 2 respectively.
+
+###Categorical Predictors
+For categorical predictors, we use cross tabulation tables to examine the associations between the variable and the binary predicted variable. Cross tabulations give us the frequency counts of the predicted variable across each value of the predictor variables. They allow us to see whether there is an association between the two variables. We present cross tabulations between the predicted variables and all our categorical predictor variables in the methods section below. 
+
+For categorical predictors,a Chi-Square ($\chi^2$) test can also be used to assess whether or not the distribution of values of the predictor vary significantly across values of the dependent variable. The null hypothesis, $H_0$, states that the proportion of accidents where the predictor occurs is the same for accidents involving a drunk driver as it is for accidents without a drunk driver, meaning the predictor is not correlated with drunk driving accidents. If we see a high $\chi^2$ value with a p-value below 0.05, we reject $H_0$ in favor of $H_a$. The alternative hypothesis, $H_a$, states that the proportion of instances of the predictor varies significantly with instances of drunk driving. The results of the $\chi^2$ test, including the degrees of freedom and p-values for each categorical variable are presented in Table 1 in the Results section. 
+
+###Continuous Predictors
+
+For continuous predictors, such as percent of bachelor's degree holders and median household income, we use a t-test to compare the predictor's mean value for each category of the dependent variable (ie when DRINKING_D = 0 and when DRINKING_D = 1). The null and alternative hypotheses for the t-test are similar to those for the Chi-Square test. The null hypothesis, $H_0$, states that the mean is the same for both values of the dependent variable, while the alternative hypothesis, $H_a$, states that mean varies significantly for different values of the dependent variable. Again, p-values below 0.05 suggest $H_0$ is rejected in favor of $H_a$, indicating a association exists between the predictor and dependent variable. These results are presented for the two continuous variable in Table 2 in the Results section. 
+
+To test the assumption of multicollinearity between predictors, the Pearson correlation matrix is also presented. Correlation coefficients less than -0.8 or greater than 0.8 indicate a high risk of multicollinearity between our predictor variables. 
+
+
+#Results
+
+Here we present and discuss the results of our exploratory analyses and logistic regression.
+
+
+##Exploratory Analysis
+
+Before running our regression we examine some preliminary characteristics of the data. First, we look at a summary of the count and proportion of accidents involving drunk driving:
+
+```{r tabulation, warning=FALSE}
+attach(mydata, warn.conflicts = FALSE)
+DRINKING_D.tab <- table(DRINKING_D)
+DRINKING_D.tab
+prop.table(DRINKING_D.tab)
+```
+
+The first row shows the counts of the DRINKING_D variables and the second row shows the sane variable broken up into percents. In this sample, a large majority of accidents, almost 95%, do NOT involve a drunk driver, while only 5.7% do. This means that in Philadelphia between 2008-2012, the probability of an accident involving a drunk driver is 5.7%. The odds of an accident involving a drunk driver are $\frac{2485}{40897} = 0.061$.
+
+###Cross Tabulation and Chi-Squared Statistic
+
+Next, we look at the association between the DRINKING_D variable and each of the categorical predictors using cross tabulations and Chi-Square tests. Below are all the pairwise cross tabulations. Table 1 is a summary of all the cross tabulations. It shows us the counts of the independent variables split up by whether or not drivers were drunk. The % is the percentage of drunk driving accidents or non-drunk driving accidents where the independent variable is equal to 1. Table 2 is a summary of the Chi-Square tests for each categorical predictor variable. 
+
+
+
+```{r crosstabs}
+attach(mydata, warn.conflicts = FALSE)
+CrossTable(DRINKING_D, FATAL_OR_M, prop.r=FALSE, prop.chisq=FALSE, chisq=TRUE, prop.t=FALSE)
+CrossTable(DRINKING_D, OVERTURNED, prop.r=FALSE, prop.chisq=FALSE, chisq=TRUE, prop.t=FALSE)
+CrossTable(DRINKING_D, CELL_PHONE, prop.r=FALSE, prop.chisq=FALSE, chisq=TRUE, prop.t=FALSE)
+CrossTable(DRINKING_D, SPEEDING, prop.r=FALSE, prop.chisq=FALSE, chisq=TRUE, prop.t=FALSE)
+CrossTable(DRINKING_D, AGGRESSIVE, prop.r=FALSE, prop.chisq=FALSE, chisq=TRUE, prop.t=FALSE)
+CrossTable(DRINKING_D, DRIVER1617, prop.r=FALSE, prop.chisq=FALSE, chisq=TRUE, prop.t=FALSE)
+CrossTable(DRINKING_D, DRIVER65PLUS, prop.r=FALSE, prop.chisq=FALSE, chisq=TRUE, prop.t=FALSE)
+
+```
+
+
+Looking at the p-values, we can reject $H_0$ for all of the categorical predictors except for cell phone use (p-value = 0.687), meaning all variables except cell phone use is associated with drunk driving accidents. For accidents involving cell phone use, this makes sense because we see a very similar proportion between those involving a drunk driver (1.13%) and those that do not (1.04%). For accidents involving drunk driving, we see a higher proportion of accidents with fatalities/major injuries, overturned vehicles, and speeding. For accidents that do not involve a drunk driver we see higher rates of aggressive driving, and those involving 16 or 17 year old drivers, or drivers over the age of 65. For very young and very old drivers, this suggests there may be other factors, perhaps low experience in young drivers or impaired motor skills in older drivers, that might be more likely to cause an accident than alcohol. 
+
+###T-Test
+
+We also examine the relationship between drunk driving accidents and the two continuous variables, percent of bachelor's degree holders and median household income. Table 2 shows the mean and standard deviation (SD) of each predictor for each category of DRINKING_D, as well as the value of the t statistic, the degrees of freedom, and the p-value for the t-test.
+
+```{r t.test, include=FALSE}
+attach(mydata)
+tapply(PCTBACHMOR, DRINKING_D, mean)
+tapply(PCTBACHMOR, DRINKING_D, sd)
+tapply(MEDHHINC, DRINKING_D, mean)
+tapply(MEDHHINC, DRINKING_D, sd)
+
+t.test(PCTBACHMOR~DRINKING_D)
+t.test(MEDHHINC~DRINKING_D)
+
+```
+
+INSERT T-TEST TABLE HERE
+
+Right away we see the mean values for both predictors are very similar for accidents with and without alcohol involved, so we'd expect the t-test to show little association with dependent variable. The t-test p-values confirm this. Both p-values are greater than 0.05, so we are unable to reject the null hypothesis that the distribution of the continuous variables is not significantly different drunk driving and non drunk driving accidents. 
+
+###Logistic Regression Assumptions
+
+
+In order to make sure there are no problems with multicollinearity, we look at the Pearson correlation coefficients between all predictors to identify issues of multicollinearity.
+
+```{r Pearson}
+
+attach(mydata)
+predictors = as.matrix(cbind(FATAL_OR_M, OVERTURNED, CELL_PHONE, SPEEDING, AGGRESSIVE, DRIVER1617, DRIVER65PLUS, PCTBACHMOR, MEDHHINC))
+cortable = cor(predictors)
+kable(cortable)
+
+```
+
+None of the correlation coefficients are greater than 0.8 or less than -0.8, suggesting there are no issues with multicollinearity between any of the predictors. Also to note are that there may be potential problems when using Pearson correlation to measure associations between 2 binary or categorical variables. Especially since our binary variables are sparse (ie not a lot of values = 1) this means that the correlation score itself
+
+##Multiple Logistic Regression Analysis
+
+The results of the logistic regression are shown below. We interpret the model parameters, significance tests, and odds ratios (OR) for each predictor and the intercept.
+
+```{r logit}
+
+mylogit = glm(DRINKING_D ~ FATAL_OR_M + OVERTURNED + CELL_PHONE + SPEEDING + AGGRESSIVE + DRIVER1617 + DRIVER65PLUS + PCTBACHMOR + MEDHHINC, data = mydata, family = "binomial")
+
+logitoutput = summary(mylogit)
+logitcoeffs = logitoutput$coefficients
+
+or_ci = exp(cbind(OR = coef(mylogit), confint(mylogit)))
+
+finallogitoutput = cbind(logitcoeffs, or_ci)
+kable(finallogitoutput)
+```
+
+All but two variables are significant, with p-values below 0.05. Accidents involving fatalities or major injuries, overturned vehicles, speeding, aggressive driving, 16 or 17 year old drivers, or those over the age of 65, and the median household income of the census block where the accident took place are significant predictors of car crashes involving an intoxicated driver. Accidents involving a driver on a cell phone and percentage of bachelor's degree holders in the census block where the accident took place are shown not to be significant in the model, both with p-values greater than 0.05, and therefore their results will not be interpreted here.
+
+INTERCEPT -2.732506616128
+
+The model estimate of the coefficient for the intercept, $\beta_0$, is -2.733. If all other predictors in the model have values of 0, the log odds of there being a drunk driver involved in a car crash is -2.733. The log odds, -2.733, yields the odds ratio $e^{-2.733} = 0.065$. So, for accidents that did NOT involve a fatality or major injury (FATAL_OR_M = 0), an overturned vehicle (OVERTURNED = 0), a speeding vehicle (SPEEDING = 0), an aggressive driver (AGGRESSIVE = 0), a 16 or 17 year old driver (DRIVER1617 = 0) or a driver over the age of 65 (DRIVER65PLUS = 0), and accidents in a census block where median household income is 0 (MEDHHINC =0), the odds of their being a drunk driver involved in the crash are 0.065. However it should be noted that the dataset was initially cleaned to remove observations where MEDHHINC = 0, so this is a purely extrapolated value. 
+
+FATAL_OR_M 0.814013801855 2.25694878
+
+The model estimate of the coefficient for accidents involving a fatality or major injury, $\beta_1$, is 0.814. For a one unit increase in FATAL_OR_M, meaning as we go from a crash without a fatality or major injury to a crash with a fatality or major injury, the log odds of there being a drunk driver increases by 0.814, holding all other predictors constant. So, using the odds ratio $e^{0.814} = 2.257$, the odds of there being a drunk driver involved in a crash increase by 2.257, or $(e^{0.814} - 1) * 100\% = 125.7\%$, for accidents with a fatality or major injury compared with those without a fatality or major injury when holding all other predictors constant.
+
+OVERTURNED 0.928921376176 2.53177687
+
+The model estimate of the coefficient for accidents involving an overturned vehicle, $\beta_2$, is 0.929. For a one unit increase in OVERTURNED, meaning as we go from a crash without an overturned vehicle to a crash with an overturned vehicle, the log odds of there being a drunk driver increases by 0.929, holding all other predictors constant. So, using the odds ratio $e^{0.929} = 2.232$, the odds of there being a drunk driver involved in a crash increase by 2.232, or $ (e^{0.929} - 1) * 100\% = 123.2\% $, for accidents with an overturned vehicle compared with those without an overturned vehicle when holding all other predictors constant.
+
+SPEEDING 1.538975665492 4.65981462
+
+The model estimate of the coefficient for accidents involving at least one vehicle travelling over the speed limit, $\beta_4$, is 1.539. For a one unit increase in SPEEDING, meaning as we go from a crash without a speeding vehicle to a crash with a speeding vehicle, the log odds of there being a drunk driver increases by 1.539, holding all other predictors constant. So, using the odds ratio $e^{1.539} = 4.66$, the odds of there being a drunk driver involved in a crash increase by 4.66, or $(e^{0.1.539} - 1) * 100\% = 366.0\%$, for accidents with a speeding vehicle compared with those without a speeding vehicle when holding all other predictors constant.
+
+AGGRESSIVE -0.596915945677 0.55050681
+
+The model estimate of the coefficient for accidents involving an aggressive driver, $\beta_5$, is -0.597. For a one unit increase in AGGRESSIVE, meaning as we go from a crash without an aggressive driver to a crash with an aggressive driver, the log odds of there being a drunk driver decreases by 0.597, holding all other predictors constant. So, using the odds ratio $e^{-0.597} = 0.551$, the odds of there being a drunk driver involved in a crash decrease by 0.551, or $(e^{-0.597} - 1) * 100% = 55.1\%$, for accidents with an aggressive driver compared with those without an aggressive driver when holding all other predictors constant.
+
+DRIVER1617 -1.280295964022 0.27795502
+
+The model estimate of the coefficient for accidents involving a 16 or 17 year old driver, $\beta_6$, is -1.280. For a one unit increase in DRIVER1617, meaning as we go from a crash without a 16 or 17 year old driver to a crash with a 16 or 17 year old driver, the log odds of there being a drunk driver decreases by 1.280, holding all other predictors constant. So, using the odds ratio $e^{-1.280} = 0.278$, the odds of there being a drunk driver involved in a crash decrease by 0.278, or $(e^{-1.280} - 1) * 100\% = 27.8\%$, for accidents with a 16 or 17 year old driver compared with those without a 16 or 17 year old driver when holding all other predictors constant.
+
+DRIVER65PLUS -0.774664640320 0.46085831
+
+The model estimate of the coefficient for accidents involving a driver over the age of 64, $\beta_7$, is -0.775. For a one unit increase in DRIVER65PLUS, meaning as we go from a crash without a driver over the age of 64 to a crash with a driver over the age of 64, the log odds of there being a drunk driver decreases by 0.775, holding all other predictors constant. So, using the odds ratio $e^{-0.775} = 0.461$, the odds of there being a drunk driver involved in a crash decrease by 0.461, or $(e^{-0.775} - 1)* 100\% = 46.1\%$, for accidents with a driver over the age of 64 compared with those without a driver over the age of 64 when holding all other predictors constant.
+
+
+
+
+MEDHHINC 0.000002804492 1.00000280
+
+The model estimate of the coefficient for median household income, $\beta_9$, is 0.000003. For a one unit (\$1) increase in MEDHHINC for the census block where an accident takes place, the log odds of there being a drunk driver increases by 0.000003, holding all other predictors constant. So, using the odds ratio $e^{0.000003} = 1.00$, the odds of there being a drunk driver involved in a crash increase by 1.00, or $(e^{0.000003} - 1) * 100\% = 100\%$, as median household income increases in a given census block when holding all other predictors constant.
+
+Next, we take a look at the histogram of fitted values. 
+
+```{r fig.height = 3, fig.width =4 }
+
+darkgray_theme=theme(text=element_text(size=12,  family="Rockwell", color = "gray35"), axis.text= element_text(size=9,  family="Rockwell", color = "gray35"), plot.title = element_text(hjust = 0.5), axis.ticks = element_line(color = "gray45"))
+
+
+ggplot(data = (mylogit), aes(x = mylogit$fitted.values))+
+  geom_histogram(binwidth = .03, fill = "darkgreen")+
+  xlab("Fitted Values")+
+  darkgray_theme 
+```
+
+We need to choose a cutoff value so we can classify points as either high probability of there being a drunk driver or a low probability. Preferably, this cutoff would satisfy the criteria laid out in the Methods section. Below is a summary table of different probability cutoffs and their corresponding Sensitivity, Specificity, and Missclassification Rates. The cutoff rate with the lowest Missclassification rate is highlighted. 
+
+
+```{r, include=FALSE}
+fit <- mylogit$fitted
+fit.binary = (fit>=0.02)
+x = (CrossTable(fit.binary, mydata$DRINKING_D, prop.r=FALSE, prop.t=FALSE, prop.chisq=FALSE))
+a = x$t[1,1]
+b = x$t[1,2]
+c = x$t[2,1]
+d = x$t[2,2]
+specificity_0.02 = a/(a+c)
+sensitivity_0.02 = b/(b+d)
+missclass_0.02   = (b+c)/(a+b+c+d)
+
+fit.binary = (ifelse(fit>=0.03, 1, 0))
+x = (CrossTable(fit.binary, mydata$DRINKING_D, prop.r=FALSE, prop.t=FALSE, prop.chisq=FALSE))
+a = x$t[1,1]
+b = x$t[1,2]
+c = x$t[2,1]
+d = x$t[2,2]
+specificity_0.03 = a/(a+c)
+sensitivity_0.03 = b/(b+d)
+missclass_0.03   = (b+c)/(a+b+c+d)
+
+fit.binary = (ifelse(fit>=0.05, 1, 0))
+x = (CrossTable(fit.binary, mydata$DRINKING_D, prop.r=FALSE, prop.t=FALSE, prop.chisq=FALSE))
+a = x$t[1,1]
+b = x$t[1,2]
+c = x$t[2,1]
+d = x$t[2,2]
+specificity_0.05 = a/(a+c)
+sensitivity_0.05 = b/(b+d)
+missclass_0.05   = (b+c)/(a+b+c+d)
+
+fit.binary = (ifelse(fit>=0.07, 1, 0))
+x = (CrossTable(fit.binary, mydata$DRINKING_D, prop.r=FALSE, prop.t=FALSE, prop.chisq=FALSE))
+a = x$t[1,1]
+b = x$t[1,2]
+c = x$t[2,1]
+d = x$t[2,2]
+specificity_0.07 = a/(a+c)
+sensitivity_0.07 = b/(b+d)
+missclass_0.07   = (b+c)/(a+b+c+d)
+
+fit.binary = (ifelse(fit>=0.08, 1, 0))
+x = (CrossTable(fit.binary, mydata$DRINKING_D, prop.r=FALSE, prop.t=FALSE, prop.chisq=FALSE))
+a = x$t[1,1]
+b = x$t[1,2]
+c = x$t[2,1]
+d = x$t[2,2]
+specificity_0.08 = a/(a+c)
+sensitivity_0.08 = b/(b+d)
+missclass_0.08   = (b+c)/(a+b+c+d)
+
+fit.binary = (ifelse(fit>=0.09, 1, 0))
+x = (CrossTable(fit.binary, mydata$DRINKING_D, prop.r=FALSE, prop.t=FALSE, prop.chisq=FALSE))
+a = x$t[1,1]
+b = x$t[1,2]
+c = x$t[2,1]
+d = x$t[2,2]
+specificity_0.09 = a/(a+c)
+sensitivity_0.09 = b/(b+d)
+missclass_0.09   = (b+c)/(a+b+c+d)
+
+fit.binary = (ifelse(fit>=0.1, 1, 0))
+x = (CrossTable(fit.binary, mydata$DRINKING_D, prop.r=FALSE, prop.t=FALSE, prop.chisq=FALSE))
+a = x$t[1,1]
+b = x$t[1,2]
+c = x$t[2,1]
+d = x$t[2,2]
+specificity_0.1 = a/(a+c)
+sensitivity_0.1 = b/(b+d)
+missclass_0.1   = (b+c)/(a+b+c+d)
+
+fit.binary = (ifelse(fit>=0.15, 1, 0))
+x = (CrossTable(fit.binary, mydata$DRINKING_D, prop.r=FALSE, prop.t=FALSE, prop.chisq=FALSE))
+a = x$t[1,1]
+b = x$t[1,2]
+c = x$t[2,1]
+d = x$t[2,2]
+specificity_0.15 = a/(a+c)
+sensitivity_0.15 = b/(b+d)
+missclass_0.15   = (b+c)/(a+b+c+d)
+
+fit.binary = (ifelse(fit>=0.2, 1, 0))
+x = (CrossTable(fit.binary, mydata$DRINKING_D, prop.r=FALSE, prop.t=FALSE, prop.chisq=FALSE))
+a = x$t[1,1]
+b = x$t[1,2]
+c = x$t[2,1]
+d = x$t[2,2]
+specificity_0.2 = a/(a+c)
+sensitivity_0.2 = b/(b+d)
+missclass_0.2   = (b+c)/(a+b+c+d)
+
+fit.binary = (ifelse(fit>=0.5, 1, 0))
+x = (CrossTable(fit.binary, mydata$DRINKING_D, prop.r=FALSE, prop.t=FALSE, prop.chisq=FALSE))
+a = x$t[1,1]
+b = x$t[1,2]
+c = x$t[2,1]
+d = x$t[2,2]
+specificity_0.5 = a/(a+c)
+sensitivity_0.5 = b/(b+d)
+missclass_0.5   = (b+c)/(a+b+c+d)
+
+
+```
+
+
+
+Cutoff Value | Sensitivity        | Specificity             | Missclassification Rate 
+------------ | -----------------  | ----------------------- | -----------------------
+0.02         |`r sensitivity_0.02`| `r specificity_0.02`    | `r missclass_0.02`
+0.03         |`r sensitivity_0.03`| `r specificity_0.03`    | `r missclass_0.03`
+0.05         |`r sensitivity_0.05`| `r specificity_0.05`    | `r missclass_0.05`
+0.07         |`r sensitivity_0.07`| `r specificity_0.07`    | `r missclass_0.07`
+0.08         |`r sensitivity_0.08`| `r specificity_0.08`    | `r missclass_0.08`
+0.09         |`r sensitivity_0.09`| `r specificity_0.09`    | `r missclass_0.09`
+0.1          |`r sensitivity_0.1` | `r specificity_0.1`     | `r missclass_0.1`
+0.15         |`r sensitivity_0.15`| `r specificity_0.15`    | `r missclass_0.15`
+0.2          |`r sensitivity_0.2` | `r specificity_0.2`     | `r missclass_0.2`
+0.5          |`r sensitivity_0.5` | `r specificity_0.5`     | `r missclass_0.5`
+
+
+
+So it seems that the last probability cutoff of 0.5, which is very far to the right in the distribution of fitted probabilities, gives us the minimum missclassification rate of `r missclass_0.5`. The cutoff rate that gives us the highest missclassification rate is 0.02, which is the lowest value we tested. So it seems the higher the cutoff value, the lower the misclassification rate. This suggests the model really doesn't want to label any datapoints as high probability of being a drunk driving incident (ie predicting DRINKING_D = 1). IT seems to want to automatically label all observation, except the very extreme cases, as non drunk driving incidents. This makes sense given the scarcity of drunk driving incidents in the whole dataset. Next we calculate the ROC curve and plot it below. We also calculate the Area Under the Curve, and the cutoff value that minimizes the distance between the top left corner of the graph and the curve. All are reported below 
+
+```{r ROC, fig.height = 4, fig.width=5}
+## FUnction to choose minimium distance cutoff
+opt.cut = function(perf, pred){
+  cut.ind = mapply(FUN=function(x, y, p){
+    d = (x - 0)^2 + (y-1)^2
+    ind = which(d == min(d))
+    c(sensitivity = y[[ind]], specificity = 1-x[[ind]], 
+      cutoff = p[[ind]])
+  }, perf@x.values, perf@y.values, pred@cutoffs)
+}
+
+fit <- mylogit$fitted
+
+### Creating ROC curve
+a <- cbind(mydata$DRINKING_D, fit)
+#Let's make the names of the variables easy to understand
+colnames(a) <- c("labels","predictions")
+
+roc <- as.data.frame(a)
+
+pred <- prediction(roc$predictions, roc$labels)
+#Below, tpr = true positive rate, another term for sensitivity
+#fpr = false positive rate, or 1-specificity
+roc.perf = performance(pred, measure = "tpr", x.measure="fpr")
+plot(roc.perf)
+abline(a=0,b=1)
+
+```
+
+```{r results='asis'}
+opt.cutoff = (opt.cut(roc.perf, pred))
+kable(((opt.cut(roc.perf, pred))))
+```
+```{r}
+auc.perf = performance(pred, measure ="auc")
+kable(data.frame(AUC =  as.numeric(auc.perf@y.values)))
+```
+
+Sp the cutoff point where the distance from the top left corner of the graph is minimized is 0.065. The accompanying specificity and sensitivity values which are 0.66 and 0.542 respectively. This cut-off is actually above the maximum cutoffs we tested earlier. This makes sense because the largest cutoff there also had the lowest missclassification rates. So raising the cutoff value even more might lead to a better Sensitivity and Specificity value. The area under the ROC curve is approximately 0.63, which places it in the lower end of the 'poor' rating when it comes to AUC's. 
+
+```{r}
+auc.perf = performance(pred, measure ="auc")
+auc.perf@y.values
+```
+
+Finally, we also run a model without our continuous predictor variables and present the results below 
+
+```{r}
+mylogit1 = glm(DRINKING_D ~ FATAL_OR_M + OVERTURNED + CELL_PHONE + SPEEDING + AGGRESSIVE + DRIVER1617 + DRIVER65PLUS , data = mydata, family = "binomial")
+
+logitoutput1 = summary(mylogit1)
+logitcoeffs1 = logitoutput1$coefficients
+
+or_ci1 = exp(cbind(OR = coef(mylogit1), confint(mylogit1)))
+
+finallogitoutput1 = cbind(logitcoeffs1, or_ci1)
+kable(finallogitoutput1)
+
+
+```
+
+In this model, all coefficients are significant at a 5% Confidence level except for CELL_PHONE, which is the exact same as in the previous regression. The coefficients themselves have also remained relatively stable. We also compare the AIC of the 2 models below 
+
+
+Model                     |    AIC
+------------------------- | -----------------------
+With Continuous predictors| `r extractAIC(mylogit)` 
+W/o Continuous predictors | `r extractAIC(mylogit1)` 
+
+## Discussion 
+SO in this paper we ran a logistic regression on a dataset of car accidents, with the dependent variable being whether the driver was drunk. The highly significant and postie predictor variables were whether the accident was fatal and/or involved serious injuries, whether the car was overturned, and whether the car was speeding. It's also worth noting that there was a small positive and weakly significant effect of the median house value where the accident occurred. The significant and negative predictors are whether the driver was aggressively driving, whether the Driver was 16 or 17, and whether the Driver was over the age of 65. For the most part, these make intuitive sense as we would expect drunk driving incidents to be correlated with fatal, fast, and overturned accidents. The fact that is surprising is that aggressive driving has a negative coefficient. Given that fatal accidents and accidents that involved speeding are positively related, one would assume that aggressive driving is also positively associated. This could indicate that drunk drivers try to be cautious, but because of their inebriated states.
+
+  Looking at the results of the regression, it seems that logistic regression may not be the best tool to use here. The reason is the rarity of the event itself. Drunk Driving is a very rare event and only occurs  5.7% of the time. Our results with the very high cutoff values relative to the histogram of fitted values. The model just seems to want to label every observation as 0. In this case. In this case, the modeling rare events methods proposed by Paul Allison could be more appropriate. The problem could be with the small sample bias that comes with Maximum Likelihood Estimation of the logistic regression model. Some limitations of the analysis is that the direction of causality is not really clear. It doesn't really make sense to say that driving fast increases your probability of being a drunk driver, and the causality probably goes in the opposite direction. So from a regression point of view, the independent variables are not necessarily causing the dependent variable. 
