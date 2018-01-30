@@ -54,7 +54,7 @@ Below is the the results from the Scree plot, which is a graph of the number of 
 
 
 ```{r Nbclust_results}
-#We remove the firrst 1 column (Poly_ID) which shouldn't be subjected to the K-means
+#We remove the first 1 column (Poly_ID) which shouldn't be subjected to the K-means
 #The scale command standardizes the variables so that the means are 0 and s.d. = 1.
 df <- data.frame(scale(philadata[-1]))
 
