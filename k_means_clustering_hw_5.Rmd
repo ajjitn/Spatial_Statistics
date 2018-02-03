@@ -2,7 +2,6 @@
 title: "Cpln HW 4"
 author:
 - Ajjit Narayanan
-- Bill Cohen
 date: "`r format(Sys.time(), '%d. %B %Y')`"
 output:
   word_document:
